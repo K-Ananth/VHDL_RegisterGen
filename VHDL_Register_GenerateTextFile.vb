@@ -6,9 +6,9 @@ Sub GenerateTextFile()
     Dim oCellRENO As Object, oCellADDR As Object, oCellRST As Object
     Dim oCellCLK As Object, oCellRDO As Object, oCellWRD As Object
     Dim sFilePath As String, sFormattedText As String
-    Dim sCellValueE As String, sCellValueG As String, sRegAddr As String, DefaultValueH As String
+    Dim sCellValueE As String, sCellValueG As String, sRegAddr As String, DefaultValueI As String,ZeroPaddedRegSize As String,ZeroPaddedReg As String
     Dim i As Integer, j As Integer, j_temp As Integer, Row As Integer, Rd_Reg_cnt As Integer
-    Dim BitWidth As Integer, BitRange As String
+    Dim BitWidth As Integer 
     Dim SPLIT_VALUE As Integer, Dec As Double, Ind As Integer
     Dim RDEN As String, WREN As String, RDEO As String
     Dim ADDR As String, RST As String, CLK As String
@@ -22,26 +22,33 @@ Sub GenerateTextFile()
     ' Get active sheet
     oDoc = ThisComponent
     oSheet = oDoc.Sheets(0) ' Assuming first sheet contains the data
-
-    ' Fetch bit width from I25
-    oCellI25 = oSheet.getCellRangeByName("L23")
+    
+    START_OF_Row = 10
+    ' Column selection
+    RegisterName = "E"
+    Address      = "F"
+    RdORWr       = "G"
+    RegSize      = "H"
+    ResetValue   = "I"
+    
+    ' Fetch bit width from L23
+    oCellI25 = oSheet.getCellRangeByName("M23")
     BitWidth = IIf(IsNumeric(oCellI25.getValue()) And oCellI25.getValue() > 0, oCellI25.getValue(), 32)
-    BitRange = "(" & (BitWidth - 1) & " downto 0)"
+    BitRange_max = "(" & (BitWidth - 1) & " downto 0)"
 
     ' Fetch FPGA-specific values
-    RDEN = GetCellValueOrDefault(oSheet, "L19", "FPGA_RDEN")
-    WREN = GetCellValueOrDefault(oSheet, "L20", "FPGA_WREN")
-    RDEO = GetCellValueOrDefault(oSheet, "L21", "FPGA_RDEN_OUT")
-    ADDR = GetCellValueOrDefault(oSheet, "L18", "FPGA_ADDR")
-    RST  = GetCellValueOrDefault(oSheet, "L14", "RESET")
-    CLK  = GetCellValueOrDefault(oSheet, "L15", "CLK")
-    RDO  = GetCellValueOrDefault(oSheet, "L16", "READ_DATA")
-    WRD  = GetCellValueOrDefault(oSheet, "L17", "WR_DATA")
-    RD_SPV  = GetCellValueOrDefault(oSheet, "L24", "16")
+    RDEN    = GetCellValueOrDefault(oSheet, "M19", "FPGA_RDEN")
+    WREN    = GetCellValueOrDefault(oSheet, "M20", "FPGA_WREN")
+    RDEO    = GetCellValueOrDefault(oSheet, "M21", "FPGA_RDEN_OUT")
+    ADDR    = GetCellValueOrDefault(oSheet, "M18", "FPGA_ADDR")
+    RST     = GetCellValueOrDefault(oSheet, "M14", "RESET")
+    CLK     = GetCellValueOrDefault(oSheet, "M15", "CLK")
+    RDO     = GetCellValueOrDefault(oSheet, "M16", "READ_DATA")
+    WRD     = GetCellValueOrDefault(oSheet, "M17", "WR_DATA")
+    RD_SPV  = GetCellValueOrDefault(oSheet, "M24", "16")
 
     ' Initialize parameters
     SPLIT_VALUE  = RD_SPV
-    START_OF_Row = 10
     sFormattedText = ""
     
     ' Get the current date and time
@@ -52,13 +59,19 @@ Sub GenerateTextFile()
 
 	' Find the maximum signal name length for alignment
 	maxSignalLength = 0
+	SepRegMaxLength = 0
 	Row = START_OF_Row
 	Do While True
-	    oCellE = oSheet.getCellRangeByName("E" & Row)
+	    oCellE = oSheet.getCellRangeByName(RegisterName & Row)
+	    Sep_Reg_Size = oSheet.getCellRangeByName(RegSize & Row)
 	    sCellValueE = oCellE.getString()
+	    sCellValueH = Sep_Reg_Size.getValue()
 	    If sCellValueE = "" Then Exit Do
 	    If Len(sCellValueE) > maxSignalLength Then
 	        maxSignalLength = Len(sCellValueE)
+	    End If
+	    If Len(PadDataReg(sCellValueH, BitWidth)) > SepRegMaxLen Then
+	        SepRegMaxLen = Len(sCellValueE)+Len(PadDataReg(sCellValueH, BitWidth))
 	    End If
 	    Row = Row + 1
 	Loop
@@ -66,10 +79,20 @@ Sub GenerateTextFile()
 	' Reset Row and format the output
 	Row = START_OF_Row
 	Do While True
-	    oCellE = oSheet.getCellRangeByName("E" & Row)
-	    oCellG = oSheet.getCellRangeByName("G" & Row)
+	    oCellE = oSheet.getCellRangeByName(RegisterName & Row)
+	    oCellG = oSheet.getCellRangeByName(RdORWr & Row)
+	    Sep_Reg_Size = oSheet.getCellRangeByName(RegSize & Row)
 	    sCellValueE = oCellE.getString()
 	    sCellValueG = oCellG.getString()
+	    sCellValueH = Sep_Reg_Size.getValue()
+	    sCellStringH = Sep_Reg_Size.getString()
+	    
+	    If sCellStringH = "" Then
+	    	BitRange =  BitRange_max
+	    Else
+	    	BitRange =  "(" & (sCellValueH - 1) & " downto 0)"
+	    End If 
+	    
 	
 	    If sCellValueE = "" Then Exit Do
 	    i = i + 1
@@ -129,7 +152,7 @@ Sub GenerateTextFile()
   				sFormattedText = sFormattedText & Chr(10)
   				Exit Do
   			end if
-  				formattedSignalName = sCellValueE & j & String(maxSignalLength - Len("Rd_ENa_"), " ")
+  				formattedSignalName = sCellValueE & j & String(maxSignalLength - Len("Rd_EN"), " ")
     			sFormattedText = sFormattedText & "signal Rd_EN_OUT_" & formattedSignalName & " : std_logic:='0';" & Chr(10)
     			j=j-1
     	Loop
@@ -156,9 +179,9 @@ Sub GenerateTextFile()
      Row = START_OF_Row
 	 Do While True
         ' Get the cell values from column E ,G and F  
-        oCellE = oSheet.getCellRangeByName("E" & Row)
-        oCellG = oSheet.getCellRangeByName("G" & Row)
-        RegAddr = oSheet.getCellRangeByName("F" & Row)
+        oCellE = oSheet.getCellRangeByName(RegisterName & Row)
+        oCellG = oSheet.getCellRangeByName(RdORWr & Row)
+        RegAddr = oSheet.getCellRangeByName(Address & Row)
         sCellValueE = oCellE.getString()
         sCellValueG = oCellG.getString()
         sRegAddr    = RegAddr.getString()
@@ -212,13 +235,27 @@ Sub GenerateTextFile()
     	'sFormattedText = sFormattedText & RDO &" <= "
    	End if
    	
-    '-----------------Read_DATA_Latch-----------------
+	 '-----------------Read_DATA_Latch-----------------
+    
+    Row = START_OF_Row
+    
 	 Do While True
         ' Get the cell values from column E and column G     
-        oCellE = oSheet.getCellRangeByName("E" & Row)
-        oCellG = oSheet.getCellRangeByName("G" & Row)
+        oCellE = oSheet.getCellRangeByName(RegisterName & Row)
+        oCellG = oSheet.getCellRangeByName(RdORWr & Row)
+        Sep_Reg_Size = oSheet.getCellRangeByName(RegSize & Row)
         sCellValueE = oCellE.getString()
         sCellValueG = oCellG.getString()
+        sCellValueH = Sep_Reg_Size.getValue()
+	    sCellStringH = Sep_Reg_Size.getString()
+	    	    
+	    If sCellStringH = "" Then
+	    	ZeroPaddedReg = ""	
+	    Else	        	
+	    	ZeroPaddedReg =  PadDataReg(sCellValueH, BitWidth)        
+	    End If 
+	    
+	    ZeroPaddedRegSize =	ZeroPaddedReg & sCellValueE
        
         ' Stop if the cell in column E is empty (assume end of entries)
         If sCellValueE = "" Then 
@@ -235,8 +272,9 @@ Sub GenerateTextFile()
         	'******************************
 	        	IF C = (SPLIT_VALUE-1) Then
 	        		C=0
-	        		formattedSignalName = sCellValueE & "_reg " & String(maxSignalLength - Len(sCellValueE), " ")
-	        		sFormattedText = sFormattedText & "	     " & formattedSignalName & " when "
+	        		'formattedSignalName = sCellValueE & "_reg " & String(maxSignalLength - Len(sCellValueE), " ")
+	        		formattedSignalName = ZeroPaddedRegSize & "_reg " & String((SepRegMaxLen - Len(ZeroPaddedRegSize))-10, " ")
+	        		sFormattedText =  sFormattedText & "	     " & formattedSignalName & " when "
 	        		formattedSignalName = sCellValueE & "_rd " & String(maxSignalLength - Len(sCellValueE), " ")
 	        		sFormattedText = sFormattedText & formattedSignalName &" = '1' else "& Chr(10) & "	     (others => '0');" & Chr(10) & Chr(10)
 	        	Else
@@ -245,7 +283,8 @@ Sub GenerateTextFile()
         				sFormattedText = sFormattedText & "Rd_DATA_" & j+1 &" <= "  & Chr(10)
         				j=j+1
         			End If 
-        			formattedSignalName = sCellValueE & "_reg " & String(maxSignalLength - Len(sCellValueE), " ")
+        			'formattedSignalName = sCellValueE & "_reg " & String((maxSignalLength) - Len(sCellValueE), " ")
+        			formattedSignalName = ZeroPaddedRegSize & "_reg " & String((SepRegMaxLen - Len(ZeroPaddedRegSize))-10, " ")
         			sFormattedText =  sFormattedText & "	     " & formattedSignalName & " when "
         			formattedSignalName = sCellValueE & "_rd " & String(maxSignalLength - Len(sCellValueE), " ")
         			sFormattedText =  sFormattedText & formattedSignalName & " = '1' else " & Chr(10)
@@ -255,7 +294,8 @@ Sub GenerateTextFile()
         		IF Row = START_OF_Row Then
         			sFormattedText = sFormattedText & RDO & " <= "  & Chr(10)
         		End if
-        		formattedSignalName = sCellValueE & "_reg " & String(maxSignalLength - Len(sCellValueE), " ")
+        		formattedSignalName = ZeroPaddedRegSize & "_reg " & String((SepRegMaxLen - Len(ZeroPaddedRegSize))-10, " ")
+        		'formattedSignalName = ZeroPaddedRegSize & "_reg " & String(maxSignalLength - Len(sCellValueE), " ")
              	sFormattedText =  sFormattedText & "	     " & formattedSignalName & " when "
              	formattedSignalName = sCellValueE & "_rd " & String(maxSignalLength - Len(sCellValueE), " ")
              	sFormattedText = sFormattedText & formattedSignalName &" = '1' else "& Chr(10)
@@ -292,8 +332,8 @@ Sub GenerateTextFile()
 	 '-----------------Read_Enable_Out-----------------
 	 Do While True
         ' Get the cell values from column E and column G     
-        oCellE = oSheet.getCellRangeByName("E" & Row)
-        oCellG = oSheet.getCellRangeByName("G" & Row)
+        oCellE = oSheet.getCellRangeByName(RegisterName & Row)
+        oCellG = oSheet.getCellRangeByName(RdORWr & Row)
         sCellValueE = oCellE.getString()
         sCellValueG = oCellG.getString()
 
@@ -346,22 +386,39 @@ Sub GenerateTextFile()
 	
 	 Do While True
         ' Get the cell values from column E and column G     
-        oCellE = oSheet.getCellRangeByName("E" & Row)
-        oCellG = oSheet.getCellRangeByName("G" & Row)   
-        Default_V = oSheet.getCellRangeByName("H" & Row) 
+        oCellE = oSheet.getCellRangeByName(RegisterName & Row)
+        oCellG = oSheet.getCellRangeByName(RdORWr & Row)   
+        Sep_Reg_Size = oSheet.getCellRangeByName(RegSize & Row) 
+        Default_V = oSheet.getCellRangeByName(ResetValue & Row)
+        
         sCellValueE = oCellE.getString()
         sCellValueG = oCellG.getString()
-        DefaultValueH = Default_V.getString()
+        sCellValueH = Sep_Reg_Size.getValue()
+        DefaultValueI = Default_V.getString()
+        sCellValueH = Sep_Reg_Size.getValue()
+	    sCellStringH = Sep_Reg_Size.getString()
+	    
+	    If sCellStringH = "" Then
+	    	BitRange = ""
+	    Else
+	    	BitRange =  "(" & (sCellValueH - 1) & " downto 0)"
+	    End If 
+
 
         ' Stop if the cell in column E is empty (assume end of entries)
         If sCellValueE = "" Then Exit Do
 
         ' Generate the signals based on the value in column G
         If sCellValueG = "RW" Or sCellValueG = "W" Or sCellValueG = ""Then
-        	IF DefaultValueH = "" Then
-            	sFormattedText =  sFormattedText &  "process("& RST &","& CLK &") " & Chr(10) & "begin" & Chr(10) & "    if rising_edge("& CLK &") then"& Chr(10) &"        if ("& RST &" = '1') then" & Chr(10) &"            "& sCellValueE &"_reg <= (others => '0');" & Chr(10) & "        elsif("& sCellValueE &"_wr = '1') then" &Chr(10) &"            "& sCellValueE &"_reg <= "& WRD &";" & Chr(10) &"        end if;" & Chr(10) &"    end if;" & Chr(10) &"end process;" & Chr(10) & Chr(10)  
-            ELSE
-            	sFormattedText =  sFormattedText &  "process("& RST &","& CLK &") " & Chr(10) & "begin" & Chr(10) & "    if rising_edge("& CLK &") then"& Chr(10) &"        if ("& RST &" = '1') then" & Chr(10) &"            "& sCellValueE &"_reg <= X""" & DefaultValueH & """;" & Chr(10) & "        elsif("& sCellValueE &"_wr = '1') then" &Chr(10) &"            "& sCellValueE &"_reg <= "& WRD &";" & Chr(10) &"        end if;" & Chr(10) &"    end if;" & Chr(10) &"end process;" & Chr(10) & Chr(10)	
+        	IF DefaultValueI = "" Then
+            	sFormattedText =  sFormattedText &  "process("& RST &","& CLK &") " & Chr(10) & "begin" & Chr(10) & "    if rising_edge("& CLK &") then"& Chr(10) &"        if ("& RST &" = '1') then" & Chr(10) &"            "& sCellValueE &"_reg <= (others => '0');" & Chr(10) & "        elsif("& sCellValueE &"_wr = '1') then" &Chr(10) &"            "& sCellValueE &"_reg <= "& WRD & BitRange &";" & Chr(10) &"        end if;" & Chr(10) &"    end if;" & Chr(10) &"end process;" & Chr(10) & Chr(10)  
+            ELSE ' it executes if default value fro write register is provided
+            	 If Len(DefaultValueI) < BitWidth/4 Then
+	       		 	DefaultValueI_SizeMatched = String((BitWidth/4) - Len(DefaultValueI), "0") & DefaultValueI 
+	       		 ELSE
+	       		 	DefaultValueI_SizeMatched = DefaultValueI
+	   			 End If
+            	sFormattedText =  sFormattedText &  "process("& RST &","& CLK &") " & Chr(10) & "begin" & Chr(10) & "    if rising_edge("& CLK &") then"& Chr(10) &"        if ("& RST &" = '1') then" & Chr(10) &"            "& sCellValueE &"_reg <= x""" & DefaultValueI_SizeMatched & """;" & Chr(10) & "        elsif("& sCellValueE &"_wr = '1') then" &Chr(10) &"            "& sCellValueE &"_reg <= "& WRD & BitRange &";" & Chr(10) &"        end if;" & Chr(10) &"    end if;" & Chr(10) &"end process;" & Chr(10) & Chr(10)	
             END IF     
         End If
     
@@ -413,6 +470,7 @@ Sub GenerateTextFile()
 
     ' Execute the command to open the file
     Shell(sCommand, 1)
+   
 
 End Sub
 
@@ -469,4 +527,43 @@ Function GetCellValueOrDefault(oSheet As Object, CellAddress As String, DefaultV
     Else
         GetCellValueOrDefault = CellValue
     End If
+End Function
+
+Function PadDataReg(size As Integer, maxSize As Integer) As String
+    Dim remaining As Integer
+    Dim groupsOfFour As Integer
+    Dim extraZeros As Integer
+    Dim padding As String
+    
+    ' Ensure size and maxSize are provided
+    If size <= 0 Or maxSize <= 0 Then
+        MsgBox "Error: Invalid input values"
+        Exit Function
+    End If
+    
+    ' Calculate the number of bits needed to match max size
+    remaining = maxSize - size
+    
+    ' Validate that maxSize is greater than size
+    If remaining < 0 Then
+        MsgBox "Error: maxSize must be greater than or equal to size"
+        Exit Function
+    End If
+    
+    ' Determine how many full groups of four fit in x"0000" format
+    groupsOfFour = remaining \ 4 ' Integer division
+    extraZeros = remaining Mod 4 ' Remaining zeros outside full groups
+    
+    ' Construct the padding using String() instead of Strings.StrDup()
+     If groupsOfFour >= 1 Then
+    	padding = "x""" & String(groupsOfFour, "0") & """"
+     End If
+    
+    ' Add extra zeros if needed
+    If extraZeros > 0 Then
+        padding = padding & " & """ & String(extraZeros, "0") & """"
+    End If
+    
+    ' Return only the padding
+    PadDataReg = padding
 End Function
